@@ -172,4 +172,5 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## Related
 
 - [Railway Documentation](https://docs.railway.com/reference/variables#railway-provided-variables)
+- [Railway Public Networking](https://docs.railway.com/reference/public-networking)
 - [Railway Platform](https://railway.app)
