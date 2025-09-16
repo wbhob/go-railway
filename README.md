@@ -89,6 +89,57 @@ env := railway.MustLoad()
 var env = railway.MustLoad()
 ```
 
+## Examples
+
+### Web Server with Railway Detection and Headers
+
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+    "net/http"
+    "os"
+
+    "github.com/wbhob/go-railway"
+)
+
+func handler(w http.ResponseWriter, r *http.Request) {
+    // Extract Railway headers
+    headers := railway.HeadersFromRequest(r)
+
+    // Log request details
+    log.Printf("Request from %s via edge %s (ID: %s)",
+        headers.RealIP, headers.RailwayEdge, headers.RailwayRequestID)
+
+    fmt.Fprintf(w, "Hello from Railway! Your IP: %s\n", headers.RealIP)
+}
+
+func main() {
+    var port string = "8080" // default
+
+    if railway.IsRailway() {
+        env, err := railway.Load()
+        if err != nil {
+            log.Fatal(err)
+        }
+
+        fmt.Printf("Running on Railway: %s/%s\n", env.ProjectName, env.ServiceName)
+
+        // Use Railway's PORT variable for the server
+        if railwayPort := os.Getenv("PORT"); railwayPort != "" {
+            port = railwayPort
+        }
+    }
+
+    http.HandleFunc("/", handler)
+
+    log.Printf("Server starting on port %s", port)
+    log.Fatal(http.ListenAndServe(":"+port, nil))
+}
+```
+
 ### Middleware for Request Logging
 
 ```go
