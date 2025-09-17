@@ -53,7 +53,7 @@ func main() {
 }
 ```
 
-### HTTP Headers
+### HTTP Middleware
 
 ```go
 package main
@@ -61,19 +61,43 @@ package main
 import (
     "fmt"
     "net/http"
+    "log"
 
     "github.com/wbhob/go-railway"
 )
 
 func handler(w http.ResponseWriter, r *http.Request) {
-    // Extract Railway headers from the request
-    headers := railway.HeadersFromRequest(r)
+    // Get Railway headers from context (set by middleware)
+    headers, ok := railway.HeadersFromContext(r.Context())
+    if !ok {
+        log.Printf("Railway headers not found in context")
+        return
+    }
 
     fmt.Printf("Client IP: %s\n", headers.RealIP)
     fmt.Printf("Edge Region: %s\n", headers.RailwayEdge)
     fmt.Printf("Request ID: %s\n", headers.RailwayRequestID)
 
     w.WriteHeader(http.StatusOK)
+}
+
+func main() {
+    // Wrap your handler with Railway middleware
+    http.Handle("/", railway.Handler(http.HandlerFunc(handler)))
+
+    log.Fatal(http.ListenAndServe(":8080", nil))
+}
+```
+
+### Direct Header Parsing
+
+```go
+func handler(w http.ResponseWriter, r *http.Request) {
+    // Extract Railway headers directly from the request
+    headers := railway.HeadersFromRequest(r)
+
+    fmt.Printf("Client IP: %s\n", headers.RealIP)
+    // ... rest stays the same
 }
 ```
 
@@ -106,8 +130,8 @@ import (
 )
 
 func handler(w http.ResponseWriter, r *http.Request) {
-    // Extract Railway headers
-    headers := railway.HeadersFromRequest(r)
+    // Get Railway headers from context
+    headers, _ := railway.HeadersFromContext(r.Context())
 
     // Log request details
     log.Printf("Request from %s via edge %s (ID: %s)",
@@ -127,13 +151,13 @@ func main() {
 
         fmt.Printf("Running on Railway: %s/%s\n", env.ProjectName, env.ServiceName)
 
-        // Use Railway's PORT variable for the server
         if railwayPort := os.Getenv("PORT"); railwayPort != "" {
             port = railwayPort
         }
     }
 
-    http.HandleFunc("/", handler)
+    // Use Railway middleware to automatically parse headers into context
+    http.Handle("/", railway.Handler(http.HandlerFunc(handler)))
 
     log.Printf("Server starting on port %s", port)
     log.Fatal(http.ListenAndServe(":"+port, nil))
@@ -143,21 +167,28 @@ func main() {
 ### Middleware for Request Logging
 
 ```go
-func railwayLoggingMiddleware(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        headers := railway.HeadersFromRequest(r)
+func logRequest(ctx context.Context) {
+    headers, ok := railway.HeadersFromContext(ctx)
+    if !ok {
+        log.Printf("No Railway headers found")
+        return
+    }
 
-        // Log with Railway-specific context
-        log.Printf("[%s] %s %s - IP: %s, Edge: %s",
-            headers.RailwayRequestID,
-            r.Method,
-            r.URL.Path,
-            headers.RealIP,
-            headers.RailwayEdge,
-        )
+    log.Printf("Processing request %s from %s",
+        headers.RailwayRequestID, headers.RealIP)
+}
 
-        next.ServeHTTP(w, r)
-    })
+func handler(w http.ResponseWriter, r *http.Request) {
+    // Headers are available throughout the request lifecycle
+    logRequest(r.Context())
+
+    // Your business logic here
+    w.WriteHeader(http.StatusOK)
+}
+
+func main() {
+    http.Handle("/", railway.Handler(http.HandlerFunc(handler)))
+    log.Fatal(http.ListenAndServe(":8080", nil))
 }
 ```
 
