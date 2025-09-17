@@ -1,10 +1,15 @@
 package railway
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"time"
 )
+
+type contextKey struct{}
+
+var headersKey contextKey
 
 const (
 	// HeaderRealIP for identifying client's remote IP.
@@ -56,4 +61,23 @@ func HeadersFromRequest(r *http.Request) Headers {
 		RequestStart:     requestStart,
 		RailwayRequestID: r.Header.Get(HeaderRailwayRequestID),
 	}
+}
+
+// Handler returns an HTTP middleware that extracts Railway headers from the request
+// and stores them in the request context for access by downstream handlers.
+func Handler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		headers := HeadersFromRequest(r)
+		ctx := context.WithValue(r.Context(), headersKey, headers)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// HeadersFromContext extracts the Railway headers from the request context.
+// Returns zero-value Headers if not found.
+func HeadersFromContext(ctx context.Context) (Headers, bool) {
+	if headers, ok := ctx.Value(headersKey).(Headers); ok {
+		return headers, true
+	}
+	return Headers{}, false
 }
